@@ -1,7 +1,6 @@
-// In dev (Docker), the backend is exposed on host port 8000.
-// CORS_ALLOW_ALL_ORIGINS = True so direct calls work fine.
-// In production, set VITE_API_BASE to the Railway backend URL.
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+// Dev: direct to localhost:8000 (CORS enabled, Docker exposes port 8000)
+// Prod (Vercel): empty string — vercel.json rewrites /api/* → Render backend
+const API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : '';
 
 async function jsonFetch(path, opts = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
