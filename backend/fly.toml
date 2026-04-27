@@ -1,0 +1,46 @@
+app = "playto-payout-api"
+primary_region = "sin"   # Singapore — closest free region to India
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  DEBUG = "False"
+  ALLOWED_HOSTS = "*.fly.dev"
+  PORT = "8000"
+
+[processes]
+  web    = "gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"
+  worker = "celery -A config worker --loglevel=info --concurrency=2"
+  beat   = "celery -A config beat --loglevel=info"
+
+[[services]]
+  internal_port = 8000
+  protocol      = "tcp"
+  processes     = ["web"]
+
+  [[services.ports]]
+    handlers = ["http"]
+    port     = 80
+    force_https = true
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port     = 443
+
+  [services.concurrency]
+    type       = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+  processes = ["web"]
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
+  processes = ["worker", "beat"]
