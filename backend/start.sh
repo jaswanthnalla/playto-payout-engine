@@ -1,21 +1,36 @@
 #!/usr/bin/env bash
-
-echo "=== Environment ==="
-echo "PORT=${PORT}"
-echo "DATABASE_URL (masked)=$(echo ${DATABASE_URL} | sed 's/:\/\/[^@]*@/:\/\/***@/')"
-echo "CELERY_TASK_ALWAYS_EAGER=${CELERY_TASK_ALWAYS_EAGER}"
-
-echo "=== Test Django import ==="
-python -c "import django; django.setup(); print('Django OK:', django.VERSION)" || echo "Django import FAILED"
+set -e
 
 echo "=== Running migrations ==="
-python manage.py migrate --noinput 2>&1 && echo "Migrations OK" || echo "WARNING: Migrations failed"
+python manage.py migrate --noinput
 
-echo "=== Collecting static ==="
-python manage.py collectstatic --noinput 2>&1 && echo "Collectstatic OK" || echo "WARNING: Collectstatic failed"
+echo "=== Collecting static files ==="
+python manage.py collectstatic --noinput
 
 echo "=== Seeding merchants ==="
-python manage.py seed_merchants 2>&1 && echo "Seed OK" || echo "WARNING: Seed failed"
+python manage.py seed_merchants
 
-echo "=== Starting Gunicorn ==="
-exec python -m gunicorn config.wsgi:application --bind "0.0.0.0:${PORT:-8000}" --workers 1 --timeout 120
+# Only start Celery if not running in eager/sync mode
+if [ "${CELERY_TASK_ALWAYS_EAGER}" != "True" ]; then
+  echo "=== Starting Celery worker ==="
+  celery -A config worker --loglevel=info --concurrency=2 --detach \
+    --logfile=/tmp/celery-worker.log \
+    --pidfile=/tmp/celery-worker.pid
+
+  echo "=== Starting Celery beat ==="
+  celery -A config beat --loglevel=info --detach \
+    --logfile=/tmp/celery-beat.log \
+    --pidfile=/tmp/celery-beat.pid \
+    --scheduler django_celery_beat.schedulers:DatabaseScheduler
+else
+  echo "=== CELERY_TASK_ALWAYS_EAGER=True — tasks run inline ==="
+fi
+
+echo "=== Starting Gunicorn on ${PORT:-8000} ==="
+exec gunicorn config.wsgi:application \
+  --bind "0.0.0.0:${PORT:-8000}" \
+  --workers 1 \
+  --timeout 120 \
+  --log-level info \
+  --access-logfile - \
+  --error-logfile -
