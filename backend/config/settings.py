@@ -8,6 +8,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='dev-insecure-secret-key-change-me')
 DEBUG = config('DEBUG', default=True, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
+# Strip whitespace from each host entry
+ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
